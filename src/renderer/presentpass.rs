@@ -1,4 +1,4 @@
-use ash::extensions::khr::{Surface, Swapchain, XlibSurface};
+use ash::extensions::khr::{Surface, Swapchain, WaylandSurface, XlibSurface};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 use ash::Device;
@@ -48,8 +48,7 @@ pub struct PresentPass
 
 impl PresentPass
 {
-	/// Creates an X11 surface.
-	fn create_surface<E: EntryV1_0, I: InstanceV1_0>(
+	fn create_x11_surface<E: EntryV1_0, I: InstanceV1_0>(
 		entry: &E, instance: &I, window: &winit::Window,
 	) -> Result<vk::SurfaceKHR, vk::Result>
 	{
@@ -68,7 +67,30 @@ impl PresentPass
 		unsafe {
 			result = xlib_surface_loader.create_xlib_surface(&x11_create_info, None);
 		}
-		result
+		return result;
+	}
+
+	#[allow(dead_code)]
+	fn create_wayland_surface<E: EntryV1_0, I: InstanceV1_0>(
+		entry: &E, instance: &I, window: &winit::Window,
+	) -> Result<vk::SurfaceKHR, vk::Result>
+	{
+		use winit::os::unix::WindowExt;
+		let wayland_display = window.get_wayland_display().unwrap();
+		let wayland_surface = window.get_wayland_surface().unwrap();
+		let wayland_create_info = vk::WaylandSurfaceCreateInfoKHR {
+			s_type: vk::StructureType::WAYLAND_SURFACE_CREATE_INFO_KHR,
+			p_next: ptr::null(),
+			flags: Default::default(),
+			display: wayland_display,
+			surface: wayland_surface,
+		};
+		let wayland_surface_loader = WaylandSurface::new(entry, instance);
+		let result;
+		unsafe {
+			result = wayland_surface_loader.create_wayland_surface(&wayland_create_info, None);
+		}
+		return result;
 	}
 
 	/// Creates a vk::Swapchain and a vk::Rect2D for the current RenderState and surface.
@@ -558,7 +580,7 @@ impl PresentPass
 	{
 		// Surface
 		let surface_loader = Surface::new(&rs.entry, &rs.instance);
-		let surface = PresentPass::create_surface(&rs.entry, &rs.instance, &rs.window).unwrap();
+		let surface = PresentPass::create_x11_surface(&rs.entry, &rs.instance, &rs.window).unwrap();
 		let surface_formats;
 		unsafe {
 			assert!(surface_loader.get_physical_device_surface_support(rs.pdevice, rs.queue_family_index, surface));
